@@ -3,56 +3,44 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Label OS Pro</title>
+<title>Streaming Addon Core</title>
 
 <style>
-:root{
-  --bg:#0b0b0b;
-  --card:#181818;
-  --accent:#1db954;
-  --text:#fff;
-  --muted:#aaa;
-}
-
 body{
   margin:0;
   font-family:system-ui;
-  background:var(--bg);
-  color:var(--text);
+  background:#0b0b0b;
+  color:white;
 }
 
 header{
-  position:sticky;
-  top:0;
-  background:#111;
-  padding:12px;
-  border-bottom:1px solid #222;
-  z-index:10;
-}
-
-input,button{
   padding:10px;
-  margin:4px;
-  border:none;
-  border-radius:10px;
+  background:#111;
+  display:flex;
+  gap:10px;
 }
 
 input{
-  width:260px;
+  flex:1;
+  padding:10px;
+  border-radius:8px;
+  border:none;
   background:#222;
-  color:#fff;
+  color:white;
 }
 
 button{
-  background:var(--accent);
-  font-weight:bold;
+  padding:10px 14px;
+  border:none;
+  border-radius:8px;
+  background:#1db954;
   cursor:pointer;
 }
 
 .layout{
   display:grid;
-  grid-template-columns:320px 1fr;
-  height:calc(100vh - 70px);
+  grid-template-columns:300px 1fr;
+  height:calc(100vh - 60px);
 }
 
 .sidebar{
@@ -66,28 +54,14 @@ button{
   overflow:auto;
 }
 
-.card{
-  background:var(--card);
-  padding:10px;
-  border-radius:12px;
-  margin-bottom:10px;
-}
-
 .track{
-  display:flex;
-  justify-content:space-between;
-  padding:8px;
+  padding:10px;
   border-bottom:1px solid #222;
   cursor:pointer;
 }
 
 .track:hover{
-  background:#222;
-}
-
-.small{
-  font-size:12px;
-  color:var(--muted);
+  background:#1a1a1a;
 }
 
 .player{
@@ -97,67 +71,33 @@ button{
   right:0;
   background:#111;
   border-top:1px solid #222;
-  display:flex;
-  align-items:center;
-  gap:10px;
   padding:10px;
+  display:flex;
+  gap:10px;
+  align-items:center;
 }
 
-audio{
-  width:220px;
-}
-
-a{
-  color:var(--accent);
-  text-decoration:none;
-}
+small{color:#aaa}
 </style>
 </head>
 
 <body>
 
 <header>
-<input id="search" placeholder="Search tracks"/>
-<button onclick="search()">Search</button>
-<button onclick="loadDemo()">Load Catalog</button>
-<button onclick="shuffle()">Shuffle</button>
-<button onclick="downloadAll()">⬇ Download All</button>
+<input id="search" placeholder="Search tracks...">
+<button onclick="runSearch()">Search</button>
+<button onclick="loadDemo()">Load</button>
 </header>
 
 <div class="layout">
 
 <div class="sidebar">
-
-<div class="card">
-<b>Import Catalog</b><br><br>
-<input id="manifestUrl" placeholder="Manifest URL"/>
-<button onclick="loadManifest()">Load</button>
-</div>
-
-<div class="card">
-<b>Downloads</b>
-<div id="downloads"></div>
-</div>
-
-<div class="card">
-<b>Favorites</b>
-<div id="fav"></div>
-</div>
-
-</div>
-
-<div class="main">
-
-<div class="card">
-<b>Library</b>
-<div id="list"></div>
-</div>
-
-<div class="card">
 <b>Queue</b>
 <div id="queue"></div>
 </div>
 
+<div class="main">
+<div id="list"></div>
 </div>
 
 </div>
@@ -168,9 +108,9 @@ a{
 <button onclick="toggle()">▶/⏸</button>
 <button onclick="next()">⏭</button>
 
-<div>
+<div style="min-width:200px">
 <div id="now">Nothing playing</div>
-<div class="small" id="sub"></div>
+<small id="sub"></small>
 </div>
 
 <audio id="audio" controls></audio>
@@ -179,25 +119,52 @@ a{
 
 <script>
 
+/* CORE STATE */
 let library = [];
 let queue = [];
-let downloads = JSON.parse(localStorage.getItem("downloads")||"[]");
-let favorites = JSON.parse(localStorage.getItem("fav")||"[]");
 let index = -1;
 
 const audio = document.getElementById("audio");
 
-/* CORE */
+/* ADD TRACK */
 function addTrack(t){
+  if(!t.url) return;
   library.push(t);
-  render();
 }
 
-/* PLAY */
-function play(i){
-  index = i;
+/* RENDER LIST */
+function render(){
+  document.getElementById("list").innerHTML =
+  library.map((t,i)=>`
+    <div class="track" onclick="addToQueue(${i})">
+      <b>${t.title}</b><br>
+      <small>${t.artist||""}</small>
+    </div>
+  `).join("");
+}
+
+/* QUEUE */
+function addToQueue(i){
+  queue.push(library[i]);
+  renderQueue();
+}
+
+function renderQueue(){
+  document.getElementById("queue").innerHTML =
+  queue.map((t,i)=>`
+    <div class="track" onclick="playQueue(${i})">
+      ${t.title}
+    </div>
+  `).join("");
+}
+
+/* PLAY ENGINE (FIXED) */
+function playQueue(i){
+
   const t = queue[i];
   if(!t) return;
+
+  index = i;
 
   audio.src = t.url;
   audio.play();
@@ -206,105 +173,17 @@ function play(i){
   document.getElementById("sub").innerText = t.artist || "";
 }
 
-/* QUEUE */
-function queueTrack(i){
-  queue.push(library[i]);
-  renderQueue();
-}
-
-/* DOWNLOAD SINGLE */
-function downloadTrack(t){
-
-  if(!t.url) return;
-
-  const a = document.createElement("a");
-  a.href = t.url;
-  a.download = (t.title || "track") + ".mp3";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-
-  downloads.push(t);
-  localStorage.setItem("downloads",JSON.stringify(downloads));
-  renderDownloads();
-}
-
-/* DOWNLOAD ALL */
-function downloadAll(){
-  library.forEach(t=>{
-    if(t.url) downloadTrack(t);
-  });
-}
-
-/* RENDER */
-function render(){
-
-  document.getElementById("list").innerHTML =
-  library.map((t,i)=>`
-    <div class="track">
-      <div onclick="queueTrack(${i})">
-        <b>${t.title}</b>
-        <div class="small">${t.artist||""}</div>
-      </div>
-
-      <div>
-        <button onclick="play(${i})">▶</button>
-        <button onclick='downloadTrack(${JSON.stringify(t)})'>⬇</button>
-        <span onclick="toggleFav('${t.url}')">
-          ${favorites.includes(t.url)?"❤️":"🤍"}
-        </span>
-      </div>
-    </div>
-  `).join("");
-
-  renderFav();
-  renderDownloads();
-}
-
-function renderQueue(){
-  document.getElementById("queue").innerHTML =
-  queue.map((t,i)=>`
-    <div class="track" onclick="play(${i})">
-      ${t.title}
-    </div>
-  `).join("");
-}
-
-/* FAVORITES */
-function toggleFav(url){
-  if(favorites.includes(url)){
-    favorites = favorites.filter(x=>x!==url);
-  }else{
-    favorites.push(url);
-  }
-
-  localStorage.setItem("fav",JSON.stringify(favorites));
-  render();
-}
-
-function renderFav(){
-  document.getElementById("fav").innerHTML =
-  favorites.map(url=>{
-    const t = library.find(x=>x.url===url);
-    return t ? `<div class="track">${t.title}</div>` : "";
-  }).join("");
-}
-
-/* DOWNLOADS */
-function renderDownloads(){
-  document.getElementById("downloads").innerHTML =
-  downloads.map(t=>`
-    <div class="track">${t.title}</div>
-  `).join("");
-}
-
-/* CONTROLS */
+/* PLAYER CONTROLS */
 function next(){
-  if(index < queue.length-1) play(index+1);
+  if(index < queue.length-1){
+    playQueue(index+1);
+  }
 }
 
 function prev(){
-  if(index > 0) play(index-1);
+  if(index > 0){
+    playQueue(index-1);
+  }
 }
 
 function toggle(){
@@ -313,45 +192,40 @@ function toggle(){
 
 audio.onended = next;
 
-/* SEARCH */
-function search(){
+/* SEARCH (REAL FIXED LOGIC) */
+function runSearch(){
+
   const q = document.getElementById("search").value.toLowerCase();
 
-  document.querySelectorAll(".track").forEach(el=>{
-    el.style.display = el.innerText.toLowerCase().includes(q)
-      ? ""
-      : "none";
-  });
+  const filtered = library.filter(t=>
+    (t.title + " " + t.artist)
+    .toLowerCase()
+    .includes(q)
+  );
+
+  document.getElementById("list").innerHTML =
+  filtered.map((t,i)=>`
+    <div class="track" onclick="addToQueue(${i})">
+      <b>${t.title}</b><br>
+      <small>${t.artist||""}</small>
+    </div>
+  `).join("");
 }
 
-/* SHUFFLE */
-function shuffle(){
-  queue.sort(()=>Math.random()-0.5);
-  renderQueue();
-}
-
-/* MANIFEST */
-async function loadManifest(){
-  const url = document.getElementById("manifestUrl").value;
-
-  const res = await fetch(url);
-  const data = await res.json();
-
-  (data.tracks||[]).forEach(t=>{
-    addTrack({
-      title:t.title,
-      artist:t.artist,
-      url:t.streamUrl || t.url
-    });
-  });
-}
-
-/* DEMO */
+/* DEMO DATA */
 function loadDemo(){
-  addTrack({title:"Neon Drive",artist:"Label X",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"});
-  addTrack({title:"Midnight Code",artist:"Label X",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"});
-  addTrack({title:"Signal Lost",artist:"Label Y",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"});
+
+  library = [
+    {title:"Track One",artist:"Label A",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"},
+    {title:"Track Two",artist:"Label B",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"},
+    {title:"Track Three",artist:"Label C",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"}
+  ];
+
+  render();
 }
+
+/* INIT */
+loadDemo();
 
 </script>
 
