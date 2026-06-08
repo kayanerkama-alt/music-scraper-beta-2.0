@@ -1,168 +1,359 @@
 <!doctype html>
 <html lang="nl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Music Frontend</title>
-  <style>
-    :root { color-scheme: dark; }
-    body { font-family: system-ui, sans-serif; margin: 24px; background:#111; color:#eee; }
-    .card { background:#1a1a1a; border:1px solid #2a2a2a; border-radius:14px; padding:16px; margin:14px 0; }
-    .row { display:flex; gap:16px; align-items:flex-start; }
-    .cover { width:160px; height:160px; border-radius:12px; object-fit:cover; background:#222; flex:0 0 auto; }
-    input { width:100%; box-sizing:border-box; padding:12px 14px; border-radius:10px; border:1px solid #333; background:#0d0d0d; color:#fff; }
-    button, a.btn { display:inline-block; margin-top:10px; margin-right:8px; padding:10px 14px; border:0; border-radius:10px; background:#2d6cdf; color:#fff; text-decoration:none; cursor:pointer; }
-    button.secondary, a.secondary { background:#333; }
-    .muted { color:#aaa; font-size:14px; }
-    .grid { display:grid; gap:12px; }
-    .src { font-size:13px; color:#8fd; word-break:break-all; }
-    .track-title { margin:0 0 6px 0; }
-    .toolbar { display:flex; gap:10px; flex-wrap:wrap; }
-    .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#262626; color:#bbb; font-size:12px; margin-right:6px; }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Label OS Pro</title>
+
+<style>
+:root{
+  --bg:#0b0b0b;
+  --card:#181818;
+  --accent:#1db954;
+  --text:#fff;
+  --muted:#aaa;
+}
+
+body{
+  margin:0;
+  font-family:system-ui;
+  background:var(--bg);
+  color:var(--text);
+}
+
+header{
+  position:sticky;
+  top:0;
+  background:#111;
+  padding:12px;
+  border-bottom:1px solid #222;
+  z-index:10;
+}
+
+input,button{
+  padding:10px;
+  margin:4px;
+  border:none;
+  border-radius:10px;
+}
+
+input{
+  width:260px;
+  background:#222;
+  color:#fff;
+}
+
+button{
+  background:var(--accent);
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.layout{
+  display:grid;
+  grid-template-columns:320px 1fr;
+  height:calc(100vh - 70px);
+}
+
+.sidebar{
+  border-right:1px solid #222;
+  padding:10px;
+  overflow:auto;
+}
+
+.main{
+  padding:10px;
+  overflow:auto;
+}
+
+.card{
+  background:var(--card);
+  padding:10px;
+  border-radius:12px;
+  margin-bottom:10px;
+}
+
+.track{
+  display:flex;
+  justify-content:space-between;
+  padding:8px;
+  border-bottom:1px solid #222;
+  cursor:pointer;
+}
+
+.track:hover{
+  background:#222;
+}
+
+.small{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.player{
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  background:#111;
+  border-top:1px solid #222;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px;
+}
+
+audio{
+  width:220px;
+}
+
+a{
+  color:var(--accent);
+  text-decoration:none;
+}
+</style>
 </head>
+
 <body>
-  <div class="card">
-    <h1>Music Frontend</h1>
-    <p class="muted">Laadt metadata en toont alleen afspeel-/downloadlinks die al in de bron staan.</p>
-    <input id="manifestA" value="https://monochrome1.cyrusna29.workers.dev/u/ea2dc96c6d2c0eaac195ef273c9c/manifest.json" />
-    <div style="height:10px"></div>
-    <input id="manifestB" value="https://qobuz-tidal-eclipse.cyrusna29.workers.dev/u/yvm7ppk2kskgtozh57nsiwamwwfb/manifest.json" />
-    <div class="toolbar">
-      <button id="loadBtn">Laad beide bronnen</button>
-      <button id="clearBtn" class="secondary">Wis</button>
+
+<header>
+<input id="search" placeholder="Search tracks"/>
+<button onclick="search()">Search</button>
+<button onclick="loadDemo()">Load Catalog</button>
+<button onclick="shuffle()">Shuffle</button>
+<button onclick="downloadAll()">⬇ Download All</button>
+</header>
+
+<div class="layout">
+
+<div class="sidebar">
+
+<div class="card">
+<b>Import Catalog</b><br><br>
+<input id="manifestUrl" placeholder="Manifest URL"/>
+<button onclick="loadManifest()">Load</button>
+</div>
+
+<div class="card">
+<b>Downloads</b>
+<div id="downloads"></div>
+</div>
+
+<div class="card">
+<b>Favorites</b>
+<div id="fav"></div>
+</div>
+
+</div>
+
+<div class="main">
+
+<div class="card">
+<b>Library</b>
+<div id="list"></div>
+</div>
+
+<div class="card">
+<b>Queue</b>
+<div id="queue"></div>
+</div>
+
+</div>
+
+</div>
+
+<div class="player">
+
+<button onclick="prev()">⏮</button>
+<button onclick="toggle()">▶/⏸</button>
+<button onclick="next()">⏭</button>
+
+<div>
+<div id="now">Nothing playing</div>
+<div class="small" id="sub"></div>
+</div>
+
+<audio id="audio" controls></audio>
+
+</div>
+
+<script>
+
+let library = [];
+let queue = [];
+let downloads = JSON.parse(localStorage.getItem("downloads")||"[]");
+let favorites = JSON.parse(localStorage.getItem("fav")||"[]");
+let index = -1;
+
+const audio = document.getElementById("audio");
+
+/* CORE */
+function addTrack(t){
+  library.push(t);
+  render();
+}
+
+/* PLAY */
+function play(i){
+  index = i;
+  const t = queue[i];
+  if(!t) return;
+
+  audio.src = t.url;
+  audio.play();
+
+  document.getElementById("now").innerText = t.title;
+  document.getElementById("sub").innerText = t.artist || "";
+}
+
+/* QUEUE */
+function queueTrack(i){
+  queue.push(library[i]);
+  renderQueue();
+}
+
+/* DOWNLOAD SINGLE */
+function downloadTrack(t){
+
+  if(!t.url) return;
+
+  const a = document.createElement("a");
+  a.href = t.url;
+  a.download = (t.title || "track") + ".mp3";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  downloads.push(t);
+  localStorage.setItem("downloads",JSON.stringify(downloads));
+  renderDownloads();
+}
+
+/* DOWNLOAD ALL */
+function downloadAll(){
+  library.forEach(t=>{
+    if(t.url) downloadTrack(t);
+  });
+}
+
+/* RENDER */
+function render(){
+
+  document.getElementById("list").innerHTML =
+  library.map((t,i)=>`
+    <div class="track">
+      <div onclick="queueTrack(${i})">
+        <b>${t.title}</b>
+        <div class="small">${t.artist||""}</div>
+      </div>
+
+      <div>
+        <button onclick="play(${i})">▶</button>
+        <button onclick='downloadTrack(${JSON.stringify(t)})'>⬇</button>
+        <span onclick="toggleFav('${t.url}')">
+          ${favorites.includes(t.url)?"❤️":"🤍"}
+        </span>
+      </div>
     </div>
-  </div>
+  `).join("");
 
-  <div id="status" class="card muted">Nog niets geladen.</div>
-  <div id="out" class="grid"></div>
+  renderFav();
+  renderDownloads();
+}
 
-  <script>
-    const out = document.getElementById('out');
-    const status = document.getElementById('status');
+function renderQueue(){
+  document.getElementById("queue").innerHTML =
+  queue.map((t,i)=>`
+    <div class="track" onclick="play(${i})">
+      ${t.title}
+    </div>
+  `).join("");
+}
 
-    const placeholder = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
-      <svg xmlns="http://www.w3.org/2000/svg" width="240" height="240">
-        <rect width="100%" height="100%" fill="#222"/>
-        <text x="50%" y="50%" fill="#777" font-size="18" text-anchor="middle" dominant-baseline="middle">No Cover</text>
-      </svg>
-    `);
+/* FAVORITES */
+function toggleFav(url){
+  if(favorites.includes(url)){
+    favorites = favorites.filter(x=>x!==url);
+  }else{
+    favorites.push(url);
+  }
 
-    function isUrl(v) {
-      return typeof v === 'string' && /^https?:\/\//i.test(v);
-    }
+  localStorage.setItem("fav",JSON.stringify(favorites));
+  render();
+}
 
-    function pickCover(track, manifest) {
-      return track.cover || track.artwork || track.image || track.thumbnail ||
-             manifest.cover || manifest.artwork || manifest.image || manifest.thumbnail || '';
-    }
+function renderFav(){
+  document.getElementById("fav").innerHTML =
+  favorites.map(url=>{
+    const t = library.find(x=>x.url===url);
+    return t ? `<div class="track">${t.title}</div>` : "";
+  }).join("");
+}
 
-    function pickAudio(track) {
-      return track.streamUrl || track.previewUrl || track.audioUrl || track.url || '';
-    }
+/* DOWNLOADS */
+function renderDownloads(){
+  document.getElementById("downloads").innerHTML =
+  downloads.map(t=>`
+    <div class="track">${t.title}</div>
+  `).join("");
+}
 
-    function pickDownload(track) {
-      return track.downloadUrl || track.download || '';
-    }
+/* CONTROLS */
+function next(){
+  if(index < queue.length-1) play(index+1);
+}
 
-    function normalizeManifest(m) {
-      const tracks = Array.isArray(m.tracks) ? m.tracks :
-                    Array.isArray(m.items) ? m.items :
-                    Array.isArray(m.data) ? m.data :
-                    [];
-      return { ...m, tracks };
-    }
+function prev(){
+  if(index > 0) play(index-1);
+}
 
-    function renderOne(sourceName, manifest) {
-      const title = manifest.title || manifest.name || sourceName;
-      const tracks = manifest.tracks || [];
+function toggle(){
+  audio.paused ? audio.play() : audio.pause();
+}
 
-      return `
-        <div class="card">
-          <h2>${title}</h2>
-          <div class="muted">${manifest.artist || manifest.description || ''}</div>
-          <div style="margin-top:8px">
-            <span class="pill">${tracks.length} tracks</span>
-            ${isUrl(manifest.cover || manifest.artwork || manifest.image) ? `<span class="pill">cover in manifest</span>` : ''}
-          </div>
-          <div style="margin-top:14px" class="grid">
-            ${tracks.map((t, i) => {
-              const cover = pickCover(t, manifest) || placeholder;
-              const audioUrl = pickAudio(t);
-              const dl = pickDownload(t);
-              const name = t.title || t.name || `Track ${i + 1}`;
-              const artist = t.artist || t.artistName || manifest.artist || '';
-              return `
-                <div class="card row">
-                  <img class="cover" src="${cover}" alt="">
-                  <div style="min-width:0; flex:1">
-                    <h3 class="track-title">${name}</h3>
-                    <div class="muted">${artist}</div>
-                    <div class="src">${audioUrl ? audioUrl : 'geen stream-url gevonden'}</div>
-                    ${audioUrl ? `<audio controls src="${audioUrl}" style="width:100%; margin-top:10px"></audio>` : ''}
-                    <div class="toolbar">
-                      ${dl ? `<a class="btn" href="${dl}" download>Download</a>` : ''}
-                      ${audioUrl ? `<a class="btn secondary" href="${audioUrl}" target="_blank" rel="noreferrer">Open stream</a>` : ''}
-                    </div>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      `;
-    }
+audio.onended = next;
 
-    async function fetchManifest(url) {
-      const res = await fetch(url, { mode: 'cors' });
-      if (!res.ok) throw new Error(`Fout bij laden: ${res.status}`);
-      const json = await res.json();
-      return normalizeManifest(json);
-    }
+/* SEARCH */
+function search(){
+  const q = document.getElementById("search").value.toLowerCase();
 
-    async function loadAll() {
-      const urls = [
-        document.getElementById('manifestA').value.trim(),
-        document.getElementById('manifestB').value.trim()
-      ].filter(Boolean);
+  document.querySelectorAll(".track").forEach(el=>{
+    el.style.display = el.innerText.toLowerCase().includes(q)
+      ? ""
+      : "none";
+  });
+}
 
-      status.textContent = 'Bezig met laden...';
-      out.innerHTML = '';
+/* SHUFFLE */
+function shuffle(){
+  queue.sort(()=>Math.random()-0.5);
+  renderQueue();
+}
 
-      const results = await Promise.allSettled(urls.map(fetchManifest));
-      const success = [];
-      const errors = [];
+/* MANIFEST */
+async function loadManifest(){
+  const url = document.getElementById("manifestUrl").value;
 
-      results.forEach((r, idx) => {
-        if (r.status === 'fulfilled') success.push({ url: urls[idx], manifest: r.value });
-        else errors.push({ url: urls[idx], error: r.reason.message || String(r.reason) });
-      });
+  const res = await fetch(url);
+  const data = await res.json();
 
-      status.innerHTML = `${success.length} bron(nen) geladen${errors.length ? `, ${errors.length} fout(en)` : ''}.`;
+  (data.tracks||[]).forEach(t=>{
+    addTrack({
+      title:t.title,
+      artist:t.artist,
+      url:t.streamUrl || t.url
+    });
+  });
+}
 
-      out.innerHTML = success.map((s, i) => renderOne(`Bron ${i + 1}`, s.manifest)).join('');
+/* DEMO */
+function loadDemo(){
+  addTrack({title:"Neon Drive",artist:"Label X",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"});
+  addTrack({title:"Midnight Code",artist:"Label X",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"});
+  addTrack({title:"Signal Lost",artist:"Label Y",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"});
+}
 
-      if (errors.length) {
-        out.innerHTML += `
-          <div class="card">
-            <h3>Fouten</h3>
-            ${errors.map(e => `<div class="muted">${e.url}<br>${e.error}</div>`).join('<hr style="border-color:#2a2a2a">')}
-          </div>
-        `;
-      }
-    }
+</script>
 
-    document.getElementById('loadBtn').onclick = () => {
-      loadAll().catch(err => {
-        status.textContent = 'Er ging iets mis.';
-        out.innerHTML = `<div class="card">Onverwachte fout: ${err.message}</div>`;
-      });
-    };
-
-    document.getElementById('clearBtn').onclick = () => {
-      out.innerHTML = '';
-      status.textContent = 'Gewist.';
-    };
-  </script>
 </body>
 </html>
