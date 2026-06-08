@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Music Frontend</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, sans-serif; margin: 24px; background:#111; color:#eee; }
+    .card { background:#1a1a1a; border:1px solid #2a2a2a; border-radius:14px; padding:16px; margin:14px 0; }
+    .row { display:flex; gap:16px; align-items:flex-start; }
+    .cover { width:160px; height:160px; border-radius:12px; object-fit:cover; background:#222; flex:0 0 auto; }
+    input { width:100%; box-sizing:border-box; padding:12px 14px; border-radius:10px; border:1px solid #333; background:#0d0d0d; color:#fff; }
+    button, a.btn { display:inline-block; margin-top:10px; margin-right:8px; padding:10px 14px; border:0; border-radius:10px; background:#2d6cdf; color:#fff; text-decoration:none; cursor:pointer; }
+    button.secondary, a.secondary { background:#333; }
+    .muted { color:#aaa; font-size:14px; }
+    .grid { display:grid; gap:12px; }
+    .src { font-size:13px; color:#8fd; word-break:break-all; }
+    .track-title { margin:0 0 6px 0; }
+    .toolbar { display:flex; gap:10px; flex-wrap:wrap; }
+    .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#262626; color:#bbb; font-size:12px; margin-right:6px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Music Frontend</h1>
+    <p class="muted">Laadt metadata en toont alleen afspeel-/downloadlinks die al in de bron staan.</p>
+    <input id="manifestA" value="https://monochrome1.cyrusna29.workers.dev/u/ea2dc96c6d2c0eaac195ef273c9c/manifest.json" />
+    <div style="height:10px"></div>
+    <input id="manifestB" value="https://qobuz-tidal-eclipse.cyrusna29.workers.dev/u/yvm7ppk2kskgtozh57nsiwamwwfb/manifest.json" />
+    <div class="toolbar">
+      <button id="loadBtn">Laad beide bronnen</button>
+      <button id="clearBtn" class="secondary">Wis</button>
+    </div>
+  </div>
+
+  <div id="status" class="card muted">Nog niets geladen.</div>
+  <div id="out" class="grid"></div>
+
+  <script>
+    const out = document.getElementById('out');
+    const status = document.getElementById('status');
+
+    const placeholder = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="240" height="240">
+        <rect width="100%" height="100%" fill="#222"/>
+        <text x="50%" y="50%" fill="#777" font-size="18" text-anchor="middle" dominant-baseline="middle">No Cover</text>
+      </svg>
+    `);
+
+    function isUrl(v) {
+      return typeof v === 'string' && /^https?:\/\//i.test(v);
+    }
+
+    function pickCover(track, manifest) {
+      return track.cover || track.artwork || track.image || track.thumbnail ||
+             manifest.cover || manifest.artwork || manifest.image || manifest.thumbnail || '';
+    }
+
+    function pickAudio(track) {
+      return track.streamUrl || track.previewUrl || track.audioUrl || track.url || '';
+    }
+
+    function pickDownload(track) {
+      return track.downloadUrl || track.download || '';
+    }
+
+    function normalizeManifest(m) {
+      const tracks = Array.isArray(m.tracks) ? m.tracks :
+                    Array.isArray(m.items) ? m.items :
+                    Array.isArray(m.data) ? m.data :
+                    [];
+      return { ...m, tracks };
+    }
+
+    function renderOne(sourceName, manifest) {
+      const title = manifest.title || manifest.name || sourceName;
+      const tracks = manifest.tracks || [];
+
+      return `
+        <div class="card">
+          <h2>${title}</h2>
+          <div class="muted">${manifest.artist || manifest.description || ''}</div>
+          <div style="margin-top:8px">
+            <span class="pill">${tracks.length} tracks</span>
+            ${isUrl(manifest.cover || manifest.artwork || manifest.image) ? `<span class="pill">cover in manifest</span>` : ''}
+          </div>
+          <div style="margin-top:14px" class="grid">
+            ${tracks.map((t, i) => {
+              const cover = pickCover(t, manifest) || placeholder;
+              const audioUrl = pickAudio(t);
+              const dl = pickDownload(t);
+              const name = t.title || t.name || `Track ${i + 1}`;
+              const artist = t.artist || t.artistName || manifest.artist || '';
+              return `
+                <div class="card row">
+                  <img class="cover" src="${cover}" alt="">
+                  <div style="min-width:0; flex:1">
+                    <h3 class="track-title">${name}</h3>
+                    <div class="muted">${artist}</div>
+                    <div class="src">${audioUrl ? audioUrl : 'geen stream-url gevonden'}</div>
+                    ${audioUrl ? `<audio controls src="${audioUrl}" style="width:100%; margin-top:10px"></audio>` : ''}
+                    <div class="toolbar">
+                      ${dl ? `<a class="btn" href="${dl}" download>Download</a>` : ''}
+                      ${audioUrl ? `<a class="btn secondary" href="${audioUrl}" target="_blank" rel="noreferrer">Open stream</a>` : ''}
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    async function fetchManifest(url) {
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) throw new Error(`Fout bij laden: ${res.status}`);
+      const json = await res.json();
+      return normalizeManifest(json);
+    }
+
+    async function loadAll() {
+      const urls = [
+        document.getElementById('manifestA').value.trim(),
+        document.getElementById('manifestB').value.trim()
+      ].filter(Boolean);
+
+      status.textContent = 'Bezig met laden...';
+      out.innerHTML = '';
+
+      const results = await Promise.allSettled(urls.map(fetchManifest));
+      const success = [];
+      const errors = [];
+
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled') success.push({ url: urls[idx], manifest: r.value });
+        else errors.push({ url: urls[idx], error: r.reason.message || String(r.reason) });
+      });
+
+      status.innerHTML = `${success.length} bron(nen) geladen${errors.length ? `, ${errors.length} fout(en)` : ''}.`;
+
+      out.innerHTML = success.map((s, i) => renderOne(`Bron ${i + 1}`, s.manifest)).join('');
+
+      if (errors.length) {
+        out.innerHTML += `
+          <div class="card">
+            <h3>Fouten</h3>
+            ${errors.map(e => `<div class="muted">${e.url}<br>${e.error}</div>`).join('<hr style="border-color:#2a2a2a">')}
+          </div>
+        `;
+      }
+    }
+
+    document.getElementById('loadBtn').onclick = () => {
+      loadAll().catch(err => {
+        status.textContent = 'Er ging iets mis.';
+        out.innerHTML = `<div class="card">Onverwachte fout: ${err.message}</div>`;
+      });
+    };
+
+    document.getElementById('clearBtn').onclick = () => {
+      out.innerHTML = '';
+      status.textContent = 'Gewist.';
+    };
+  </script>
+</body>
+</html>
